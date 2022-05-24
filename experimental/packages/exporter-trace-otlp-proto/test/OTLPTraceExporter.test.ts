@@ -338,10 +338,10 @@ describe('export - real http request destroyed before response received', () => 
   after(done => {
     server.close(done);
   });
-  it('should log the timeout request error message when timeout is 1', done => {
+  it('should log the timeout request error message when timeout is 10', done => {
     collectorExporterConfig = {
       url: 'http://localhost:8080',
-      timeoutMillis: 1,
+      timeoutMillis: 10,
     };
     collectorExporter = new OTLPTraceExporter(collectorExporterConfig);
     spans = [];
@@ -391,7 +391,7 @@ describe('export - real http request destroyed after response received', () => {
   it('should log the timeout request error message', done => {
     collectorExporterConfig = {
       url: 'http://localhost:8080',
-      timeoutMillis: 300,
+      timeoutMillis: 100,
     };
     collectorExporter = new OTLPTraceExporter(collectorExporterConfig);
     spans = [];

@@ -1,0 +1,52 @@
+name: W3C ARM Trace Context Integration Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Set up QEMU
+        id: qemu
+        uses: docker/setup-qemu-action@v1
+      - name: restore lock files
+        uses: actions/cache@master # must use unreleased master to cache multiple paths
+        id: cache
+        with:
+          # must be done before bootstrap to not include node_modules files in the cache paths
+          path: |
+            package-lock.json
+            packages/*/package-lock.json
+            metapackages/*/package-lock.json
+            packages/*/package-lock.json
+            integration-tests/*/package-lock.json
+          key: ${{ runner.os }}-w3c_integration-${{ hashFiles('**/package.json') }}
+      - name: Install and Bootstrap (cache miss)
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/ws:rw --workdir=/ws \
+          arm64v8/ubuntu:20.04 \
+          bash -exc 'apt-get update && apt-get -y install curl wget sudo git && \
+          curl -fsSL https://deb.nodesource.com/setup_14.x | sudo -E bash - && \
+          sudo apt-get install -y nodejs && \
+          npm install --ignore-scripts && \
+          npx lerna bootstrap --no-ci --hoist --scope=propagation-validation-server --include-dependencies && \
+          npm ci --ignore-scripts && \
+          npx lerna bootstrap --hoist --scope=propagation-validation-server --include-dependencies && \
+          npm install -g lerna && \
+          lerna run version && \
+          chmod 777 /ws && \
+          git config --global --add safe.directory /ws && \
+          git config --global --add safe.directory /ws/experimental/packages/otlp-grpc-exporter-base/protos && \
+          git config --global --add safe.directory /ws/experimental/packages/otlp-proto-exporter-base/protos && \
+          cd integration-tests/propagation-validation-server && \
+          npm run compile && \
+          cd ../../ && \
+          apt-get install -y python3 && \
+          apt-get install -y python3-pip && \
+          ./integration-tests/tracecontext-integration-test.sh'
