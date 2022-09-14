@@ -2,7 +2,7 @@ name: Unit Tests
 on:
   push:
     branches:
-      - main
+      - test_arm
   pull_request:
 
 jobs:
@@ -54,6 +54,66 @@ jobs:
       - name: Report Coverage
         run: npm run codecov
         if: ${{ matrix.node_version == '14' }}
+  node-tests-arm64:
+    strategy:
+      fail-fast: false
+      matrix:
+        node_version:
+          - "14"
+          - "16"
+          - "18"
+    runs-on: ubuntu-latest
+    env:
+      NPM_CONFIG_UNSAFE_PERM: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Set up QEMU
+        id: qemu
+        uses: docker/setup-qemu-action@v1
+      - name: restore lerna
+        id: cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            node_modules
+            package-lock.json
+            packages/*/node_modules
+            packages/*/package-lock.json
+            experimental/packages/*/node_modules
+            experimental/packages/*/package-lock.json
+          key: node-tests-${{ runner.os }}-${{ matrix.node_version }}-${{ hashFiles('package.json', 'packages/*/package.json', 'experimental/packages/*/package.json') }}-04292022
+      - name: Bootstrap
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/ws:rw --workdir=/ws \
+          arm64v8/ubuntu:20.04 \
+          bash -exc 'apt-get update && apt-get -y install curl wget sudo git && \
+          curl -fsSL https://deb.nodesource.com/setup_${{ matrix.node_version }}.x | sudo -E bash - && \
+          apt-get install -y nodejs && \
+          npm install --ignore-scripts && \
+          chmod 777 /ws && \
+          sudo chown -R 1001:121 "/root/.npm" && \
+          npx lerna bootstrap --no-ci --hoist --nohoist='zone.js' --ignore @opentelemetry/selenium-tests'
+      - name: Build
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/ws:rw --workdir=/ws \
+          arm64v8/ubuntu:20.04 \
+          bash -exc 'apt-get update && apt-get -y install curl wget sudo git && \
+          curl -fsSL https://deb.nodesource.com/setup_${{ matrix.node_version }}.x | sudo -E bash - && \
+          apt-get install -y nodejs && \
+          chmod 777 /ws && \
+          git config --global --add safe.directory /ws && \
+          git config --global --add safe.directory /ws/experimental/packages/otlp-grpc-exporter-base/protos && \
+          git config --global --add safe.directory /ws/experimental/packages/otlp-proto-exporter-base/protos && \
+          npm run compile'
+      - name: Unit tests
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/ws:rw --workdir=/ws \
+          arm64v8/ubuntu:20.04 \
+          bash -exc 'apt-get update && apt-get -y install curl wget sudo git && \
+          curl -fsSL https://deb.nodesource.com/setup_${{ matrix.node_version }}.x | sudo -E bash - && \
+          apt-get install -y nodejs && \
+          npm run test'
   node-windows-tests:
     strategy:
       fail-fast: false
